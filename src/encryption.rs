@@ -1,11 +1,10 @@
-use std::error::Error;
-
 use age::{
     scrypt::{Identity, Recipient},
     secrecy::SecretString,
 };
+use anyhow::Result;
 
-pub fn encrypt(content: &[u8], passphrase: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+pub fn encrypt(content: &[u8], passphrase: &str) -> Result<Vec<u8>> {
     let secret = SecretString::from(passphrase.to_owned());
 
     let recipient = Recipient::new(secret.clone());
@@ -15,7 +14,7 @@ pub fn encrypt(content: &[u8], passphrase: &str) -> Result<Vec<u8>, Box<dyn Erro
     Ok(encrypted)
 }
 
-pub fn decrypt(encrypted_content: &[u8], passphrase: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+pub fn decrypt(encrypted_content: &[u8], passphrase: &str) -> Result<Vec<u8>> {
     let secret = SecretString::from(passphrase.to_owned());
 
     let identity = Identity::new(secret);

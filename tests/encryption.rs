@@ -1,7 +1,7 @@
-use std::error::Error;
+use anyhow::Result;
 
 #[test]
-fn encryption_works() -> Result<(), Box<dyn Error>> {
+fn encryption_works() -> Result<()> {
     let passphrase = "passphrase_example";
 
     let content = b"Password_example";
@@ -12,7 +12,7 @@ fn encryption_works() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn decryption_works() -> Result<(), Box<dyn Error>> {
+fn decryption_works() -> Result<()> {
     let passphrase = "passphrase_example";
 
     let content = b"Password_example";
