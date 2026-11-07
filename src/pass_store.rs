@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow, ensure};
 use std::{
     env::{self},
-    fs::{File, create_dir, read, remove_file},
+    fs::{File, create_dir, read, read_dir, remove_file},
     io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -47,7 +47,13 @@ pub fn list(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn insert(store_path: &Path, pass_name: &str, password: &str, passphrase: &str) -> Result<()> {
+pub fn insert(
+    store_path: &Path,
+    pass_name: &str,
+    password: &str,
+    passphrase: &str,
+    echo: bool,
+) -> Result<()> {
     let password_path = get_password_path(store_path, pass_name);
 
     if !password_path.try_exists()? {
@@ -57,7 +63,12 @@ pub fn insert(store_path: &Path, pass_name: &str, password: &str, passphrase: &s
 
         password_file.write_all(encrypted_pass.as_slice())?;
 
-        Ok(())
+        if echo {
+            println!("{password}");
+            Ok(())
+        } else {
+            Ok(())
+        }
     } else {
         Err(anyhow!(
             "A file with the same name already exists at {0}",
@@ -105,9 +116,11 @@ pub fn edit(store_path: &Path, pass_name: &str, passphrase: &str) -> Result<()> 
 
         let edited_password = read(temp_file.path())?;
 
+        let encrypted_new_password = encrypt(edited_password.trim_ascii(), passphrase)?;
+
         let mut pass_file = File::create(password_path.as_path())?;
 
-        pass_file.write_all(edited_password.as_slice())?;
+        pass_file.write_all(encrypted_new_password.as_slice())?;
 
         Ok(())
     } else {
@@ -125,9 +138,26 @@ pub fn remove(store_path: &Path, pass_name: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn find_password(store_path: &Path, pass_names: &[String]) {
+    pass_names.iter().for_each(|pass_name| {
+        read_dir(store_path)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().ok())
+            .filter(|file_name| file_name.is_some())
+            .map(|file_name| file_name.unwrap())
+            .for_each(|name| {
+                if name.contains(pass_name) {
+                    println!("{name}")
+                }
+            });
+    });
+}
+
 fn send_to_clipboard(content: &str) -> Result<()> {
     if env::var("WAYLAND_DISPLAY").is_ok() {
-        Command::new("wl-copy").arg(content).status()?;
+        let status = Command::new("wl-copy").arg(content).status()?;
+
+        ensure!(status.success());
 
         Ok(())
     } else {
@@ -136,10 +166,12 @@ fn send_to_clipboard(content: &str) -> Result<()> {
             .stdout(Stdio::piped())
             .spawn()?;
 
-        Command::new("xclip")
+        let status = Command::new("xclip")
             .arg("-i")
             .stdin(Stdio::from(echo.stdout.unwrap()))
             .status()?;
+
+        ensure!(status.success());
 
         Ok(())
     }
