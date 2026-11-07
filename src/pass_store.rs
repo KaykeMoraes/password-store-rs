@@ -4,7 +4,7 @@ use std::{
     fs::{File, create_dir, read, remove_file},
     io::Write,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 use tempfile::NamedTempFile;
 
@@ -164,7 +164,15 @@ fn send_to_clipboard(content: &str) -> Result<()> {
         Command::new("wl-copy").arg(content).status()?;
         Ok(())
     } else {
-        Command::new("xclip").arg("-in").arg(content).status()?;
+        let echo = Command::new("echo")
+            .arg(content)
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        Command::new("xclip")
+            .arg("-i")
+            .stdin(Stdio::from(echo.stdout.unwrap()))
+            .status()?;
         Ok(())
     }
 }
@@ -189,7 +197,7 @@ mod test {
         } else {
             send_to_clipboard(content)?;
 
-            let clipboard_content = Command::new("xclip").arg("--output").output()?;
+            let clipboard_content = Command::new("xclip").arg("-o").output()?;
 
             assert!(clipboard_content.status.success());
 
