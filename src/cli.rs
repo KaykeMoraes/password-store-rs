@@ -34,7 +34,7 @@ pub enum AppCommand {
     )]
     Show {
         #[arg(id = "clipboard", short = 'c')]
-        clipboard: Option<bool>,
+        clipboard: bool,
         #[arg(id = "pass-name", required = true)]
         pass_name: String,
     },
