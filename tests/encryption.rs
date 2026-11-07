@@ -25,3 +25,16 @@ fn decryption_works() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn decryption_with_wrong_passphrase() -> Result<()> {
+    let passphrase = "passphrase_example";
+
+    let content = b"Password_example";
+
+    let encrypted_content = pass::encrypt(content, passphrase)?;
+
+    assert!(pass::decrypt(&encrypted_content, "another_passphrase").is_err());
+
+    Ok(())
+}
