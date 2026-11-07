@@ -144,7 +144,7 @@ pub fn find_password(store_path: &Path, pass_names: &[String]) {
             .unwrap()
             .map(|entry| entry.unwrap().file_name().into_string().ok())
             .filter(|file_name| file_name.is_some())
-            .map(|file_name| file_name.unwrap())
+            .flatten()
             .for_each(|name| {
                 if name.contains(pass_name) {
                     println!("{name}")
@@ -178,16 +178,14 @@ fn send_to_clipboard(content: &str) -> Result<()> {
 }
 
 mod test {
-    use super::*;
-
     #[test]
-    fn test_clipboard() -> Result<()> {
+    fn test_clipboard() -> anyhow::Result<()> {
         let content = "Hello";
 
-        if env::var("WAYLAND_DISPLAY").is_ok() {
-            send_to_clipboard(content)?;
+        if std::env::var("WAYLAND_DISPLAY").is_ok() {
+            super::send_to_clipboard(content)?;
 
-            let clipboard_content = Command::new("wl-paste").output()?;
+            let clipboard_content = std::process::Command::new("wl-paste").output()?;
 
             assert!(clipboard_content.status.success());
 
@@ -195,9 +193,9 @@ mod test {
 
             Ok(())
         } else {
-            send_to_clipboard(content)?;
+            super::send_to_clipboard(content)?;
 
-            let clipboard_content = Command::new("xclip").arg("-o").output()?;
+            let clipboard_content = std::process::Command::new("xclip").arg("-o").output()?;
 
             assert!(clipboard_content.status.success());
 

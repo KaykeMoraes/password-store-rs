@@ -2,7 +2,7 @@ use std::{env::home_dir, path::PathBuf};
 
 use clap::Parser;
 use pass::{
-    cli::{self, AppCommand, Cli},
+    cli::{AppCommand, Cli},
     pass_store,
 };
 
@@ -21,7 +21,10 @@ fn main() -> anyhow::Result<()> {
 
             pass_store::edit(&store_path, &pass_name, &passphrase)
         }
-        AppCommand::Find { pass_names } => Ok(pass_store::find_password(&store_path, &pass_names)),
+        AppCommand::Find { pass_names } => {
+            pass_store::find_password(&store_path, &pass_names);
+            Ok(())
+        }
         AppCommand::Init => pass_store::init(&store_path),
         AppCommand::Insert { echo, pass_name } => {
             let passphrase = rpassword::prompt_password("Type your passphrase: ")?;
