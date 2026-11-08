@@ -99,42 +99,46 @@ fn collect_passwords(root: &Path, dir: &Path, names: &mut Vec<String>) -> Result
     Ok(())
 }
 
-pub fn insert(
-    store_path: &Path,
-    pass_name: &str,
-    password: &str,
-    passphrase: &str,
-    echo: bool,
-) -> Result<()> {
+pub fn insert(store_path: &Path, pass_name: &str, echo: bool) -> Result<()> {
     let password_path = get_password_path(store_path, pass_name)?;
 
-    if !password_path.try_exists()? {
-        let encrypted_pass = encrypt(password.as_bytes(), passphrase)?;
+    ensure!(
+        !password_path.try_exists()?,
+        "A file with the same name already exists at {0}",
+        password_path.display()
+    );
 
-        let mut password_file = File::create_new(password_path.as_path())?;
+    let passphrase = get_passphrase()?;
 
-        password_file.write_all(encrypted_pass.as_slice())?;
+    let password = get_password()?;
 
-        if echo {
-            println!("{password}");
-            Ok(())
-        } else {
-            Ok(())
-        }
+    let encrypted_pass = encrypt(password.as_bytes(), &passphrase)?;
+
+    let mut password_file = File::create_new(password_path.as_path())?;
+
+    password_file.write_all(encrypted_pass.as_slice())?;
+
+    if echo {
+        println!("{password}");
+        Ok(())
     } else {
-        Err(anyhow!(
-            "A file with the same name already exists at {0}",
-            password_path.display()
-        ))
+        Ok(())
     }
 }
 
-pub fn show(store_path: &Path, pass_name: &str, passphrase: &str, clipboard: bool) -> Result<()> {
+pub fn show(store_path: &Path, pass_name: &str, clipboard: bool) -> Result<()> {
     let password_path = get_password_path(store_path, pass_name)?;
+
+    ensure!(
+        password_path.try_exists()?,
+        "Password {pass_name} doesn't exist in the store"
+    );
 
     let file_contents = read(password_path)?;
 
-    let password = String::from_utf8(decrypt(file_contents.as_slice(), passphrase)?)?;
+    let passphrase = get_passphrase()?;
+
+    let password = String::from_utf8(decrypt(file_contents.as_slice(), &passphrase)?)?;
 
     if clipboard {
         send_to_clipboard(&password)
@@ -144,7 +148,14 @@ pub fn show(store_path: &Path, pass_name: &str, passphrase: &str, clipboard: boo
     }
 }
 
-pub fn edit(store_path: &Path, pass_name: &str, passphrase: &str) -> Result<()> {
+pub fn edit(store_path: &Path, pass_name: &str) -> Result<()> {
+    let password_path = get_password_path(store_path, pass_name)?;
+
+    ensure!(
+        password_path.try_exists()?,
+        "The password {pass_name} was not found in the store"
+    );
+
     let editor = if let Ok(editor) = env::var("EDITOR") {
         editor
     } else if let Ok(editor) = env::var("VISUAL") {
@@ -153,33 +164,27 @@ pub fn edit(store_path: &Path, pass_name: &str, passphrase: &str) -> Result<()> 
         String::from("nano")
     };
 
-    let password_path = get_password_path(store_path, pass_name)?;
+    let passphrase = get_passphrase()?;
 
-    if password_path.try_exists()? {
-        let mut temp_file = NamedTempFile::new()?;
+    let mut temp_file = NamedTempFile::new()?;
 
-        let password = decrypt(read(password_path.as_path())?.as_slice(), passphrase)?;
+    let password = decrypt(read(password_path.as_path())?.as_slice(), &passphrase)?;
 
-        temp_file.write_all(password.as_slice())?;
+    temp_file.write_all(password.as_slice())?;
 
-        let status = Command::new(editor).arg(temp_file.path()).status()?;
+    let status = Command::new(editor).arg(temp_file.path()).status()?;
 
-        ensure!(status.success());
+    ensure!(status.success());
 
-        let edited_password = read(temp_file.path())?;
+    let edited_password = read(temp_file.path())?;
 
-        let encrypted_new_password = encrypt(edited_password.trim_ascii(), passphrase)?;
+    let encrypted_new_password = encrypt(edited_password.trim_ascii(), &passphrase)?;
 
-        let mut pass_file = File::create(password_path.as_path())?;
+    let mut pass_file = File::create(password_path.as_path())?;
 
-        pass_file.write_all(encrypted_new_password.as_slice())?;
+    pass_file.write_all(encrypted_new_password.as_slice())?;
 
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "The password {pass_name} was not found in the store"
-        ))
-    }
+    Ok(())
 }
 
 pub fn remove(store_path: &Path, pass_name: &str) -> Result<()> {
@@ -203,6 +208,24 @@ pub fn find_password(store_path: &Path, pass_names: &[String]) {
                 }
             });
     });
+}
+
+fn get_passphrase() -> Result<String> {
+    let passphrase = rpassword::prompt_password("Type your passphrase: ")?;
+
+    Ok(passphrase)
+}
+
+fn get_password() -> Result<String> {
+    let password = rpassword::prompt_password("Type your password: ")?;
+    let password_confirmation = rpassword::prompt_password("Retype your password: ")?;
+
+    ensure!(
+        password == password_confirmation,
+        "The typed passwords don't match each other"
+    );
+
+    Ok(password.to_owned())
 }
 
 fn send_to_clipboard(content: &str) -> Result<()> {

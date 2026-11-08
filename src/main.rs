@@ -17,9 +17,7 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         AppCommand::Edit { pass_name } => {
-            let passphrase = rpassword::prompt_password("Type your passphrase: ")?;
-
-            pass_store::edit(&store_path, &pass_name, &passphrase)
+            pass_store::edit(&store_path, &pass_name)
         }
         AppCommand::Find { pass_names } => {
             pass_store::find_password(&store_path, &pass_names);
@@ -27,23 +25,7 @@ fn main() -> anyhow::Result<()> {
         }
         AppCommand::Init => pass_store::init(&store_path),
         AppCommand::Insert { echo, pass_name } => {
-            let passphrase = rpassword::prompt_password("Type your passphrase: ")?;
-
-            let password =
-                rpassword::prompt_password(format!("Type the password for {pass_name}: "))?;
-
-            let password_confirmation =
-                rpassword::prompt_password(format!("Retype the password for {pass_name}: "))?;
-
-            anyhow::ensure!(password == password_confirmation, "The ");
-
-            pass_store::insert(
-                &store_path,
-                &pass_name,
-                &password,
-                &passphrase,
-                echo.unwrap_or(false),
-            )
+            pass_store::insert(&store_path, &pass_name, echo.unwrap_or(false))
         }
         AppCommand::List { subfolder } => {
             if let Some(subfolder) = subfolder {
@@ -56,10 +38,6 @@ fn main() -> anyhow::Result<()> {
         AppCommand::Show {
             clipboard,
             pass_name,
-        } => {
-            let passphrase = rpassword::prompt_password("Type your passphrase: ")?;
-
-            pass_store::show(&store_path, &pass_name, &passphrase, clipboard)
-        }
+        } => pass_store::show(&store_path, &pass_name, clipboard),
     }
 }
