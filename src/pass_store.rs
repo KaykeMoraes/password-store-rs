@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use std::{
     env::{self},
     fs::{File, create_dir, read, read_dir, remove_file},
@@ -10,8 +10,30 @@ use tempfile::NamedTempFile;
 
 use crate::{decrypt, encrypt};
 
-pub fn get_password_path(store_path: &Path, pass_name: &str) -> PathBuf {
-    store_path.join(pass_name).with_added_extension("age")
+pub fn get_password_path(store: &Path, pass_name: &str) -> Result<PathBuf> {
+    let relative = Path::new(pass_name);
+
+    ensure!(
+        !relative.as_os_str().is_empty(),
+        "Password name can't be empty"
+    );
+
+    let mut safe_name = PathBuf::new();
+
+    for component in relative.components() {
+        match component {
+            std::path::Component::Normal(part) => safe_name.push(part),
+            _ => {
+                return Err(anyhow!(
+                    "Password name must be a relative path without a '.' or '..'"
+                ));
+            }
+        }
+    }
+
+    ensure!(!safe_name.as_os_str().is_empty());
+
+    Ok(store.join(safe_name).with_added_extension("age"))
 }
 
 pub fn init(store_path: &Path) -> Result<()> {
@@ -31,16 +53,46 @@ pub fn init(store_path: &Path) -> Result<()> {
     }
 }
 
-pub fn list(path: &Path) -> Result<()> {
-    let dir = path.read_dir()?;
+pub fn list(store: &Path) -> Result<()> {
+    let root = store.canonicalize()?;
 
-    for entry in dir {
+    let mut names = Vec::new();
+
+    collect_passwords(&root, &root, &mut names)?;
+
+    names.sort();
+
+    println!("Password store/");
+
+    names.iter().for_each(|name| println!("{name}"));
+
+    Ok(())
+}
+
+fn collect_passwords(root: &Path, dir: &Path, names: &mut Vec<String>) -> Result<()> {
+    for entry in read_dir(dir)? {
         let entry = entry?;
 
-        if entry.file_type()?.is_dir() {
-            list(&entry.path())?;
-        } else {
-            println!("{}", entry.path().display())
+        let kind = entry.file_type()?;
+
+        let path = entry.path();
+
+        if kind.is_symlink() {
+            return Err(anyhow!(
+                "Symlinks are not supported in the password store: {}",
+                path.display()
+            ));
+        } else if kind.is_dir() {
+            collect_passwords(root, &path, names)?;
+        } else if kind.is_file() && path.extension().is_some_and(|ext| ext.eq("age")) {
+            let relative = path.strip_prefix(root)?.with_extension("");
+
+            names.push(
+                relative
+                    .to_str()
+                    .context("Password name is not a valid UTF-8")?
+                    .to_owned(),
+            );
         }
     }
 
@@ -54,7 +106,7 @@ pub fn insert(
     passphrase: &str,
     echo: bool,
 ) -> Result<()> {
-    let password_path = get_password_path(store_path, pass_name);
+    let password_path = get_password_path(store_path, pass_name)?;
 
     if !password_path.try_exists()? {
         let encrypted_pass = encrypt(password.as_bytes(), passphrase)?;
@@ -78,7 +130,7 @@ pub fn insert(
 }
 
 pub fn show(store_path: &Path, pass_name: &str, passphrase: &str, clipboard: bool) -> Result<()> {
-    let password_path = get_password_path(store_path, pass_name);
+    let password_path = get_password_path(store_path, pass_name)?;
 
     let file_contents = read(password_path)?;
 
@@ -101,7 +153,7 @@ pub fn edit(store_path: &Path, pass_name: &str, passphrase: &str) -> Result<()> 
         String::from("nano")
     };
 
-    let password_path = get_password_path(store_path, pass_name);
+    let password_path = get_password_path(store_path, pass_name)?;
 
     if password_path.try_exists()? {
         let mut temp_file = NamedTempFile::new()?;
@@ -131,7 +183,7 @@ pub fn edit(store_path: &Path, pass_name: &str, passphrase: &str) -> Result<()> 
 }
 
 pub fn remove(store_path: &Path, pass_name: &str) -> Result<()> {
-    let password_path = get_password_path(store_path, pass_name);
+    let password_path = get_password_path(store_path, pass_name)?;
 
     remove_file(&password_path)?;
 
