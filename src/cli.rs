@@ -24,7 +24,7 @@ pub enum AppCommand {
     )]
     Insert {
         #[arg(id = "echo", short = 'e')]
-        echo: Option<bool>,
+        echo: bool,
         #[arg(id = "pass-name", required = true)]
         pass_name: String,
     },

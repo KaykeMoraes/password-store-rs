@@ -16,17 +16,13 @@ fn main() -> anyhow::Result<()> {
     };
 
     match cli.command {
-        AppCommand::Edit { pass_name } => {
-            pass_store::edit(&store_path, &pass_name)
-        }
+        AppCommand::Edit { pass_name } => pass_store::edit(&store_path, &pass_name),
         AppCommand::Find { pass_names } => {
             pass_store::find_password(&store_path, &pass_names);
             Ok(())
         }
         AppCommand::Init => pass_store::init(&store_path),
-        AppCommand::Insert { echo, pass_name } => {
-            pass_store::insert(&store_path, &pass_name, echo.unwrap_or(false))
-        }
+        AppCommand::Insert { echo, pass_name } => pass_store::insert(&store_path, &pass_name, echo),
         AppCommand::List { subfolder } => {
             if let Some(subfolder) = subfolder {
                 pass_store::list(&store_path.join(subfolder))
